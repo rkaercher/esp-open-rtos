@@ -28,6 +28,11 @@ extern "C" {
 */
 void dhcpserver_start(const ip_addr_t *first_client_addr, uint8_t max_leases);
 
+/* Start DHCP server, like dhcpserver_start but offers this host as dns server. */
+void dhcpserver_start_with_dns(const ip_addr_t *first_client_addr, uint8_t max_leases);
+
+
+
 void dhcpserver_get_lease(const ip_addr_t *first_client_addr, uint8_t max_leases);
 
 /* Stop DHCP server.

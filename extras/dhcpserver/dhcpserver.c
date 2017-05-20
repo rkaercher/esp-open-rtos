@@ -43,6 +43,7 @@ typedef struct {
     uint8_t max_leases;
     ip_addr_t first_client_addr;
     struct netif *server_if;
+    bool offer_dns;
     dhcp_lease_t *leases; /* length max_leases */
 } server_state_t;
 
@@ -77,7 +78,7 @@ inline static void sprintf_ipaddr(const ip_addr_t *addr, char *dest)
                 ip4_addr2(addr), ip4_addr3(addr), ip4_addr4(addr));
 }
 
-void dhcpserver_start(const ip_addr_t *first_client_addr, uint8_t max_leases)
+void _dhcpserver_start(const ip_addr_t *first_client_addr, uint8_t max_leases, bool offer_dns)
 {
     /* Stop any existing running dhcpserver */
     if(dhcpserver_task_handle)
@@ -86,10 +87,21 @@ void dhcpserver_start(const ip_addr_t *first_client_addr, uint8_t max_leases)
     state = malloc(sizeof(server_state_t));
     state->max_leases = max_leases;
     state->leases = calloc(max_leases, sizeof(dhcp_lease_t));
+    state->offer_dns = offer_dns;
     // state->server_if is assigned once the task is running - see comment in dhcpserver_task()
     ip_addr_copy(state->first_client_addr, *first_client_addr);
 
     xTaskCreate(dhcpserver_task, "DHCPServer", 768, NULL, 8, &dhcpserver_task_handle);
+}
+
+void dhcpserver_start(const ip_addr_t *first_client_addr, uint8_t max_leases)
+{
+    _dhcpserver_start(first_client_addr, max_leases, false);
+}
+
+void dhcpserver_start_with_dns(const ip_addr_t *first_client_addr, uint8_t max_leases)
+{
+    _dhcpserver_start(first_client_addr, max_leases, true);
 }
 
 void dhcpserver_stop(void)
@@ -206,6 +218,9 @@ static void handle_dhcp_discover(struct dhcp_msg *dhcpmsg)
     opt = add_dhcp_option_byte(opt, DHCP_OPTION_MESSAGE_TYPE, DHCP_OFFER);
     opt = add_dhcp_option_bytes(opt, DHCP_OPTION_SERVER_ID, &state->server_if->ip_addr, 4);
     opt = add_dhcp_option_bytes(opt, DHCP_OPTION_SUBNET_MASK, &state->server_if->netmask, 4);
+    if (&state->offer_dns) {
+        opt = add_dhcp_option_bytes(opt, DHCP_OPTION_DNS_SERVER, &state->server_if->ip_addr, 4);
+    }
     opt = add_dhcp_option_bytes(opt, DHCP_OPTION_END, NULL, 0);
 
     struct netbuf *netbuf = netbuf_new();
@@ -279,6 +294,9 @@ static void handle_dhcp_request(struct dhcp_msg *dhcpmsg)
     opt = add_dhcp_option_bytes(opt, DHCP_OPTION_LEASE_TIME, &expiry, 4);
     opt = add_dhcp_option_bytes(opt, DHCP_OPTION_SERVER_ID, &state->server_if->ip_addr, 4);
     opt = add_dhcp_option_bytes(opt, DHCP_OPTION_SUBNET_MASK, &state->server_if->netmask, 4);
+    if (&state->offer_dns) {
+        opt = add_dhcp_option_bytes(opt, DHCP_OPTION_DNS_SERVER, &state->server_if->ip_addr, 4);
+    }
     opt = add_dhcp_option_bytes(opt, DHCP_OPTION_END, NULL, 0);
 
     struct netbuf *netbuf = netbuf_new();
